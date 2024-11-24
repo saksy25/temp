@@ -15,3 +15,8 @@ diagnose(Symptoms, Disease) :-
  subset([H|T], List) :-
     member(H, List),
     subset(T, List).
+
+
+
+% ?- diagnose([cough, fever, headache], Disease).   Disease = flu.
+% ?- diagnose([cough, runny_nose, fever], Disease).   Disease = cold ;   Disease = flu.
