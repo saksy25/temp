@@ -1,133 +1,165 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <limits.h>
+#include <string.h>
 
-#define MAX_NODES 100
-#define MAX_CONDITIONS 10
-#define MAX_NAME_LENGTH 10
+#define MAX_NODES 50
 
-typedef struct {
-    char name[MAX_NAME_LENGTH];
-    int cost;
+typedef struct Node {
+    int id;
+    int heuristic;
+    int expanded;
+    int optimal;
+    int num_children;
+    int children[MAX_NODES];
+    int type[MAX_NODES];
+    int cost[MAX_NODES];
 } Node;
 
-typedef struct {
-    char or_nodes[MAX_CONDITIONS][MAX_NAME_LENGTH];
-    int or_count;
-    char and_nodes[MAX_CONDITIONS][MAX_NAME_LENGTH];
-    int and_count;
-} Condition;
 
-Node nodes[MAX_NODES];
-Condition conditions[MAX_NODES];
-int node_count = 0;
-int condition_count = 0;
+Node graph[MAX_NODES];
+int num_nodes, num_connections;
 
-// Function to get the cost of a node by its name
-int get_node_cost(const char *name) {
-    for (int i = 0; i < node_count; i++) {
-        if (strcmp(nodes[i].name, name) == 0) {
-            return nodes[i].cost;
-        }
+void inputGraph() {
+    printf("Enter the number of nodes: ");
+    scanf("%d", &num_nodes);
+
+    printf("Enter node id and heuristics of each node:\n");
+    for (int i = 0; i < num_nodes; i++) {
+        graph[i].id = i;
+        graph[i].expanded = 0;
+        graph[i].optimal = 0;
+        graph[i].num_children = 0;
+        scanf("%d %d", &graph[i].id, &graph[i].heuristic);
     }
-    return INT_MAX; // Return a large value if node not found
+
+    printf("Enter the number of connections: ");
+    scanf("%d", &num_connections);
+
+    printf("Enter parent_id child_id cost AND/OR(1 for AND, 0 for OR):\n");
+
+    for (int i = 0; i < num_connections; i++) {
+        int parent, child, cost, type;
+        scanf("%d %d %d %d", &parent, &child, &cost, &type);
+
+        graph[parent].children[graph[parent].num_children] = child;
+        graph[parent].cost[graph[parent].num_children] = cost;
+        // 1 for AND, 0 for OR
+        graph[parent].type[graph[parent].num_children] = type;
+        graph[parent].num_children++;
+    }
 }
 
-// Function to calculate costs based on AND/OR conditions
-int calculate_cost(const Condition *condition) {
-    int total_cost = 0;
-
-    // Calculate AND cost
-    if (condition->and_count > 0) {
-        for (int i = 0; i < condition->and_count; i++) {
-            total_cost += get_node_cost(condition->and_nodes[i]);
-        }
+void aoStar(int node) {
+    if (graph[node].expanded) {
+        return;
     }
 
-    // Calculate OR cost
-    if (condition->or_count > 0) {
-        int min_or_cost = INT_MAX;
-        for (int i = 0; i < condition->or_count; i++) {
-            int cost = get_node_cost(condition->or_nodes[i]);
-            if (cost < min_or_cost) {
-                min_or_cost = cost;
+    graph[node].expanded = 1;
+
+    int min_heuristic = INT_MAX;
+    int selected_child = -1;
+
+    for (int i = 0; i < graph[node].num_children; i++) {
+        int child = graph[node].children[i];
+
+        if (!graph[child].expanded) {
+            // Expand the child first
+            aoStar(child);
+        }
+
+        // OR connection
+        if (graph[node].type[i] == 0) {
+            int current_heuristic = graph[child].heuristic + graph[node].cost[i];
+            if (current_heuristic < min_heuristic) {
+                min_heuristic = current_heuristic;
+                selected_child = i;
             }
         }
-        total_cost += min_or_cost;
-    }
+        // AND connection
+        else if (graph[node].type[i] == 1) {
+            int total_cost = 0;
 
-    return total_cost;
-}
-
-// Function to update the costs for all nodes based on conditions
-void update_costs() {
-    for (int i = 0; i < condition_count; i++) {
-        int cost = calculate_cost(&conditions[i]);
-        nodes[i].cost = cost;
-        printf("Updated Cost for %s: %d\n", nodes[i].name, nodes[i].cost);
-    }
-}
-
-// Function to print the shortest path
-void print_shortest_path(const char *start) {
-    for (int i = 0; i < node_count; i++) {
-        if (strcmp(nodes[i].name, start) == 0) {
-            printf("Shortest Path from %s: Cost = %d\n", start, nodes[i].cost);
-            return;
+            for (int j = 0; j < graph[node].num_children; j++) {
+                if (graph[node].type[j] == 1) {
+                    int sibling = graph[node].children[j];
+                    total_cost += graph[sibling].heuristic + graph[node].cost[j];
+                }
+            }
+            if (total_cost < min_heuristic) {
+                min_heuristic = total_cost;
+                selected_child = i;
+            }
         }
     }
-    printf("Node %s not found!\n", start);
+
+    if (min_heuristic != INT_MAX) {
+        graph[node].heuristic = min_heuristic;
+        graph[node].optimal = selected_child;
+    }
+}
+
+void printOptimalPath(int node) {
+    printf("%d ", node);
+    if (graph[node].num_children == 0) {
+        // It's a leaf node
+        return;
+    }
+
+    int optimal_child = graph[node].optimal;
+
+    if (graph[node].type[optimal_child] == 0) {
+        printOptimalPath(graph[node].children[optimal_child]);
+    }
+    else if (graph[node].type[optimal_child] == 1) {
+        for (int i = 0; i < graph[node].num_children; i++) {
+            if (graph[node].type[i] == 1) {
+                printOptimalPath(graph[node].children[i]);
+            }
+        }
+    }
 }
 
 int main() {
-    // Initialize nodes and their costs
-    strcpy(nodes[node_count].name, "A"); nodes[node_count++].cost = -1;
-    strcpy(nodes[node_count].name, "B"); nodes[node_count++].cost = 5;
-    strcpy(nodes[node_count].name, "C"); nodes[node_count++].cost = 2;
-    strcpy(nodes[node_count].name, "D"); nodes[node_count++].cost = 4;
-    strcpy(nodes[node_count].name, "E"); nodes[node_count++].cost = 7;
-    strcpy(nodes[node_count].name, "F"); nodes[node_count++].cost = 9;
-    strcpy(nodes[node_count].name, "G"); nodes[node_count++].cost = 3;
-    strcpy(nodes[node_count].name, "H"); nodes[node_count++].cost = 0;
-    strcpy(nodes[node_count].name, "I"); nodes[node_count++].cost = 0;
-    strcpy(nodes[node_count].name, "J"); nodes[node_count++].cost = 0;
+    inputGraph();
+    aoStar(0);
 
-    // Initialize conditions
-    // A: OR(B), AND(C, D)
-    strcpy(conditions[condition_count].or_nodes[0], "B");
-    conditions[condition_count].or_count = 1;
-    strcpy(conditions[condition_count].and_nodes[0], "C");
-    strcpy(conditions[condition_count].and_nodes[1], "D");
-    conditions[condition_count].and_count = 2;
-    condition_count++;
+    printf("\nUpdated Heuristics:\n");
+    for (int i = 0; i < num_nodes; i++) {
+        printf("Node %d: Heuristic = %d\n", i, graph[i].heuristic);
+    }
 
-    // B: OR(E, F)
-    strcpy(conditions[condition_count].or_nodes[0], "E");
-    strcpy(conditions[condition_count].or_nodes[1], "F");
-    conditions[condition_count].or_count = 2;
-    conditions[condition_count].and_count = 0; // No AND conditions
-    condition_count++;
-
-    // C: OR(G), AND(H, I)
-    strcpy(conditions[condition_count].or_nodes[0], "G");
-    conditions[condition_count].or_count = 1;
-    strcpy(conditions[condition_count].and_nodes[0], "H");
-    strcpy(conditions[condition_count].and_nodes[1], "I");
-    conditions[condition_count].and_count = 2;
-    condition_count++;
-
-    // D: OR(J)
-    strcpy(conditions[condition_count].or_nodes[0], "J");
-    conditions[condition_count].or_count = 1;
-    conditions[condition_count].and_count = 0; // No AND conditions
-    condition_count++;
-
-    printf("Updated Costs:\n");
-    update_costs();
+    printf("\nOptimal Path: ");
+    printOptimalPath(0);
     printf("\n");
-
-    print_shortest_path("A");
 
     return 0;
 }
+
+
+/* Input 
+Enter the number of nodes: 10
+Enter node id and heuristics of each node:
+0 0
+1 4
+2 2
+3 3
+4 6
+5 8
+6 2
+7 0
+8 0
+9 0
+Enter the number of connections: 9
+Enter parent_id child_id cost AND/OR(1 for AND, 0 for OR):
+0 1 1 0
+1 4 1 0
+1 5 1 0
+0 2 1 1
+0 3 1 1
+2 6 1 0
+2 7 1 1
+2 8 1 1
+3 9 1 0
+
+*/
