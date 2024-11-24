@@ -1,135 +1,153 @@
+//cORRECT CODE;
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <limits.h>
 #include <math.h>
 
-#define MAX_NODES 100
-#define INF 1e9
+typedef struct Edge Edge;
+typedef struct Node Node;
 
-typedef struct {
-    int x, y;
-    float gCost, hCost;
-} Node;
+struct Edge {
+    Node* target;
+    double cost;
+};
 
-Node openSet[MAX_NODES];
-int openSetSize = 0;
-Node cameFrom[MAX_NODES];
-float gScore[MAX_NODES * MAX_NODES];
+struct Node {
+    char name[2];
+    Edge* neighbors;
+    int neighborCount;
+    double gCost; // Cost from start to this node
+    double hCost; // Heuristic cost to the goal
+    Node* parent;
+};
 
-int heuristic(Node a, Node b) {
-    return abs(a.x - b.x) + abs(a.y - b.y); // Manhattan distance
+// Initialize a node with its name and heuristic cost
+Node* createNode(char* name, double hCost) {
+    Node* node = (Node*)malloc(sizeof(Node));
+    strcpy(node->name, name);
+    node->hCost = hCost;
+    node->gCost = INFINITY;
+    node->neighbors = NULL;
+    node->neighborCount = 0;
+    node->parent = NULL;
+    return node;
 }
 
-int inOpenSet(Node node) {
-    for (int i = 0; i < openSetSize; i++) {
-        if (openSet[i].x == node.x && openSet[i].y == node.y) {
-            return 1;
-        }
-    }
-    return 0;
+void addEdge(Node* from, Node* to, double cost) {
+    from->neighbors = realloc(from->neighbors, sizeof(Edge) * (from->neighborCount + 1));
+    from->neighbors[from->neighborCount].target = to;
+    from->neighbors[from->neighborCount].cost = cost;
+    from->neighborCount++;
 }
 
-void addToOpenSet(Node node) {
-    openSet[openSetSize++] = node;
+
+void reconstructPath(Node* goal) {
+    if (goal == NULL) return;
+    reconstructPath(goal->parent);
+    printf("%s ", goal->name);
 }
 
-Node getLowestFCostNode() {
-    Node lowest = openSet[0];
-    for (int i = 1; i < openSetSize; i++) {
-        if ((openSet[i].gCost + openSet[i].hCost) < (lowest.gCost + lowest.hCost)) {
-            lowest = openSet[i];
-        }
-    }
-    return lowest;
+int compareNodes(const void* a, const void* b) {
+    Node* nodeA = (Node*)a;
+    Node* nodeB = (Node*)b;
+    double fCostA = nodeA->gCost + nodeA->hCost;
+    double fCostB = nodeB->gCost + nodeB->hCost;
+    return (fCostA > fCostB) - (fCostA < fCostB);
 }
 
-void reconstructPath(Node start, Node goal) {
-    Node current = goal;
-    printf("Path found:\n");
-    while (current.x != start.x || current.y != start.y) {
-        printf("(%d, %d) ", current.x, current.y);
-        current = cameFrom[current.x * MAX_NODES + current.y];
-    }
-    printf("(%d, %d)\n", start.x, start.y);
-}
+// A* algorithm implementation
 
-void aStar(int **grid, int gridSize, Node start, Node goal) {
-    addToOpenSet(start);
-    gScore[start.x * gridSize + start.y] = 0;
+void aStar(Node* start, Node* goal) {
+    Node* openList[100]; // Priority queue for open list
+    int openListSize = 0;
+    Node* closedList[100];
+    int closedListSize = 0;
 
-    while (openSetSize > 0) {
-        Node current = getLowestFCostNode();
-        
-        if (current.x == goal.x && current.y == goal.y) {
-            reconstructPath(start, current);
+    start->gCost = 0;
+    openList[openListSize++] = start;
+
+    while (openListSize > 0) {
+        qsort(openList, openListSize, sizeof(Node*), compareNodes);
+        Node* current = openList[0];
+
+        // If the goal node is reached
+        if (current == goal) {
+            printf("Path found: ");
+            reconstructPath(goal);
+            printf("\n");
             return;
         }
 
-        // Remove current node from open set
-        for (int i = 0; i < openSetSize; i++) {
-            if (openSet[i].x == current.x && openSet[i].y == current.y) {
-                openSet[i] = openSet[--openSetSize];
-                break;
-            }
+        // Remove current node from openList
+        for (int i = 1; i < openListSize; i++) {
+            openList[i - 1] = openList[i];
         }
+        openListSize--;
 
-        int directions[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}; // Up, Down, Left, Right
+        closedList[closedListSize++] = current;
 
-        for (int i = 0; i < 4; i++) {
-            int newX = current.x + directions[i][0];
-            int newY = current.y + directions[i][1];
+        // Explore neighbors
+        for (int i = 0; i < current->neighborCount; i++) {
+            Node* neighbor = current->neighbors[i].target;
+            double tentativeGCost = current->gCost + current->neighbors[i].cost;
 
-            if (newX >= 0 && newY >= 0 && newX < gridSize && newY < gridSize && grid[newX][newY] == 0) {
-                Node neighbor = {newX, newY, current.gCost + 1, heuristic((Node){newX, newY}, goal)};
-                if (!inOpenSet(neighbor) || neighbor.gCost < gScore[newX * gridSize + newY]) {
-                    cameFrom[newX * gridSize + newY] = current;
-                    gScore[newX * gridSize + newY] = neighbor.gCost;
-                    if (!inOpenSet(neighbor)) {
-                        addToOpenSet(neighbor);
+            int inClosedList = 0;
+            for (int j = 0; j < closedListSize; j++) {
+                if (closedList[j] == neighbor) {
+                    inClosedList = 1;
+                    break;
+                }
+            }
+            if (inClosedList) continue;
+
+            if (tentativeGCost < neighbor->gCost) {
+                neighbor->gCost = tentativeGCost;
+                neighbor->parent = current;
+
+                int inOpenList = 0;
+                for (int j = 0; j < openListSize; j++) {
+                    if (openList[j] == neighbor) {
+                        inOpenList = 1;
+                        break;
                     }
+                }
+                if (!inOpenList) {
+                    openList[openListSize++] = neighbor;
                 }
             }
         }
     }
-
     printf("No path found.\n");
 }
+//O(V 2 logV+E)
 
 int main() {
-    int gridSize;
-    printf("Enter the grid size (N x N): ");
-    scanf("%d", &gridSize);
 
-    // Dynamic memory allocation for grid
-    int **grid = malloc(gridSize * sizeof(int *));
-    for (int i = 0; i < gridSize; i++) {
-        grid[i] = malloc(gridSize * sizeof(int));
-    }
-
-    printf("Enter the grid (0 for walkable, 1 for obstacle):\n");
-    for (int i = 0; i < gridSize; i++) {
-        for (int j = 0; j < gridSize; j++) {
-            scanf("%d", &grid[i][j]);
-        }
-    }
-
-    Node start, goal;
-    printf("Enter the start position (x y): ");
-    scanf("%d %d", &start.x, &start.y);
-    printf("Enter the goal position (x y): ");
-    scanf("%d %d", &goal.x, &goal.y);
-
-    // Initialize gScore for all nodes to infinity
-    for (int i = 0; i < MAX_NODES * MAX_NODES; i++) {
-        gScore[i] = INF;
-    }
-
-    aStar(grid, gridSize, start, goal);
-
-    // Free allocated memory
-    for (int i = 0; i < gridSize; i++) {
-        free(grid[i]);
-    }
-    free(grid);
+    Node* S = createNode("S", 14);
+   Node* B = createNode("B", 12);
+    Node* C = createNode("C", 4);
+    Node* D = createNode("D", 3);
+    Node* E = createNode("E", 5);
+    Node* F = createNode("F", 6);
+    Node* G = createNode("G", 2);
+    addEdge(S, C, 2);
+    addEdge(S, D, 2);
+    addEdge(D, G, 2);
+    addEdge(D, B, 2);
+    addEdge(C, F, 2);
+    addEdge(C, E, 2);
+    // addEdge(E, G, 6);
+    // addEdge(F, G, 16);
+    // addEdge(D, E, 2);
+    aStar(S, G);
+    free(S);
+    free(B);
+    free(C);
+    free(D);
+    free(E);
+    free(F);
+    free(G);
 
     return 0;
 }
