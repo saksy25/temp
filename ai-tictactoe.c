@@ -28,7 +28,10 @@ void displayBoard(char board[3][3]){
 
 int isValidMove(char board[3][3], int row, int col){
     if(row >= 0 && row < 3 && col >= 0 && col < 3 && board[row][col] == ' ') return 1;
-    else return 0;
+    else{
+        printf("Enter valid move, try again!\n");
+        return 0;
+    }
 }
 
 int checkWinner(char board[3][3]){
@@ -134,21 +137,18 @@ int minMax(char board[3][3], int depth, int isAi){
 void main(){
     char board[3][3];
     int player = 1;
-    int playerChoice;
     int winner = 0;
     int row = -1;
     int col = -1;
 
     printf("Player : 'X' and AI : 'O' \n");
-    printf("You want to play first or second? ");
-    scanf("%d", &playerChoice);
 
     initializeBoard(board);
     displayInitializeBoard();
     printf("**User should enter the move in the format of rows and columns[1-3][1-3](for e.g. 1 2)**\n");
     do{
         displayBoard(board);
-        if(player == 1 && playerChoice == 1 || player == 2 && playerChoice == 2){
+        if(player == 1){
             do{
                 printf("Enter your move: ");
                 scanf("%d%d", &row, &col);
